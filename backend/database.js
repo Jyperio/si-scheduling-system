@@ -1,0 +1,58 @@
+const sqlite3 = require('sqlite3');
+const { open } = require('sqlite');
+const path = require('path');
+const bcrypt = require('bcryptjs');
+
+const dbPromise = open({
+  filename: path.join(__dirname, 'database.sqlite'),
+  driver: sqlite3.Database
+});
+
+async function setupDatabase() {
+  const db = await dbPromise;
+  await db.exec('PRAGMA foreign_keys = ON');
+  
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      email TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'student'
+    );
+    CREATE INDEX IF NOT EXISTS idx_users_email ON users (email);
+
+    CREATE TABLE IF NOT EXISTS availability_slots (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      si_id INTEGER NOT NULL,
+      date TEXT NOT NULL,
+      start_time TEXT NOT NULL,
+      end_time TEXT NOT NULL,
+      is_booked BOOLEAN DEFAULT 0,
+      FOREIGN KEY(si_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_avail_date_times ON availability_slots (date, start_time, end_time);
+    
+    CREATE TABLE IF NOT EXISTS bookings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      slot_id INTEGER NOT NULL,
+      student_id INTEGER NOT NULL,
+      course TEXT NOT NULL,
+      topic TEXT NOT NULL,
+      notes TEXT,
+      status TEXT DEFAULT 'scheduled',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(slot_id) REFERENCES availability_slots(id) ON DELETE CASCADE,
+      FOREIGN KEY(student_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_bookings_slot ON bookings (slot_id);
+    CREATE INDEX IF NOT EXISTS idx_bookings_student ON bookings (student_id);
+  `);
+  console.log("Database initialized with SI Booking Auth schema.");
+  return db;
+}
+
+module.exports = {
+  dbPromise,
+  setupDatabase
+};
