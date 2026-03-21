@@ -1,7 +1,8 @@
 const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 const dns = require('dns');
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 // Force IPv4 DNS resolution - Render free tier does not support IPv6
 dns.setDefaultResultOrder('ipv4first');
