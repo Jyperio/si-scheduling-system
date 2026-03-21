@@ -1,58 +1,59 @@
-const sqlite3 = require('sqlite3');
-const { open } = require('sqlite');
-const path = require('path');
+const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
+require('dotenv').config();
 
-const dbPromise = open({
-  filename: path.join(__dirname, 'database.sqlite'),
-  driver: sqlite3.Database
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
 });
 
 async function setupDatabase() {
-  const db = await dbPromise;
-  await db.exec('PRAGMA foreign_keys = ON');
-  
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      email TEXT UNIQUE NOT NULL,
-      password_hash TEXT NOT NULL,
-      role TEXT NOT NULL DEFAULT 'student'
-    );
-    CREATE INDEX IF NOT EXISTS idx_users_email ON users (email);
+  const client = await pool.connect();
+  try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        email TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'student'
+      );
+      CREATE INDEX IF NOT EXISTS idx_users_email ON users (email);
 
-    CREATE TABLE IF NOT EXISTS availability_slots (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      si_id INTEGER NOT NULL,
-      date TEXT NOT NULL,
-      start_time TEXT NOT NULL,
-      end_time TEXT NOT NULL,
-      is_booked BOOLEAN DEFAULT 0,
-      FOREIGN KEY(si_id) REFERENCES users(id) ON DELETE CASCADE
-    );
-    CREATE INDEX IF NOT EXISTS idx_avail_date_times ON availability_slots (date, start_time, end_time);
-    
-    CREATE TABLE IF NOT EXISTS bookings (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      slot_id INTEGER NOT NULL,
-      student_id INTEGER NOT NULL,
-      course TEXT NOT NULL,
-      topic TEXT NOT NULL,
-      notes TEXT,
-      status TEXT DEFAULT 'scheduled',
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY(slot_id) REFERENCES availability_slots(id) ON DELETE CASCADE,
-      FOREIGN KEY(student_id) REFERENCES users(id) ON DELETE CASCADE
-    );
-    CREATE INDEX IF NOT EXISTS idx_bookings_slot ON bookings (slot_id);
-    CREATE INDEX IF NOT EXISTS idx_bookings_student ON bookings (student_id);
-  `);
-  console.log("Database initialized with SI Booking Auth schema.");
-  return db;
+      CREATE TABLE IF NOT EXISTS availability_slots (
+        id SERIAL PRIMARY KEY,
+        si_id INTEGER NOT NULL,
+        date TEXT NOT NULL,
+        start_time TEXT NOT NULL,
+        end_time TEXT NOT NULL,
+        is_booked BOOLEAN DEFAULT false,
+        FOREIGN KEY(si_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_avail_date_times ON availability_slots (date, start_time, end_time);
+      
+      CREATE TABLE IF NOT EXISTS bookings (
+        id SERIAL PRIMARY KEY,
+        slot_id INTEGER NOT NULL,
+        student_id INTEGER NOT NULL,
+        course TEXT NOT NULL,
+        topic TEXT NOT NULL,
+        notes TEXT,
+        status TEXT DEFAULT 'scheduled',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(slot_id) REFERENCES availability_slots(id) ON DELETE CASCADE,
+        FOREIGN KEY(student_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_bookings_slot ON bookings (slot_id);
+      CREATE INDEX IF NOT EXISTS idx_bookings_student ON bookings (student_id);
+    `);
+    console.log("Database initialized with SI Booking Auth schema.");
+  } finally {
+    client.release();
+  }
+  return pool;
 }
 
 module.exports = {
-  dbPromise,
+  dbPromise: pool, // keeping for backward compatibility in naming or changing to pool
+  pool,
   setupDatabase
 };

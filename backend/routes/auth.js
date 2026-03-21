@@ -15,20 +15,22 @@ router.post('/signup', async (req, res) => {
       return res.status(400).json({ error: "Invalid role." });
     }
 
-    const db = await dbPromise;
-    const existing = await db.get("SELECT id FROM users WHERE email = ?", [email]);
+    const db = dbPromise;
+    const existingRes = await db.query("SELECT id FROM users WHERE email = $1", [email]);
+    const existing = existingRes.rows[0];
     if (existing) {
       return res.status(409).json({ error: "Email already in use." });
     }
 
     const hash = await bcrypt.hash(password, 10);
-    const result = await db.run(
-      "INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, ?)",
+    const result = await db.query(
+      "INSERT INTO users (name, email, password_hash, role) VALUES ($1, $2, $3, $4) RETURNING id",
       [name, email, hash, role]
     );
 
-    const token = jwt.sign({ id: result.lastID, role }, JWT_SECRET, { expiresIn: '24h' });
-    res.status(201).json({ token, user: { id: result.lastID, name, email, role } });
+    const newId = result.rows[0].id;
+    const token = jwt.sign({ id: newId, role }, JWT_SECRET, { expiresIn: '24h' });
+    res.status(201).json({ token, user: { id: newId, name, email, role } });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Signup failed." });
@@ -42,8 +44,9 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: "Missing required fields." });
     }
 
-    const db = await dbPromise;
-    const user = await db.get("SELECT * FROM users WHERE email = ?", [email]);
+    const db = dbPromise;
+    const userRes = await db.query("SELECT * FROM users WHERE email = $1", [email]);
+    const user = userRes.rows[0];
     if (!user) {
       return res.status(401).json({ error: "Invalid credentials." });
     }
@@ -63,8 +66,9 @@ router.post('/login', async (req, res) => {
 
 router.get('/me', authenticate, async (req, res) => {
   try {
-    const db = await dbPromise;
-    const user = await db.get("SELECT id, name, email, role FROM users WHERE id = ?", [req.user.id]);
+    const db = dbPromise;
+    const userRes = await db.query("SELECT id, name, email, role FROM users WHERE id = $1", [req.user.id]);
+    const user = userRes.rows[0];
     if (!user) return res.status(404).json({ error: "User not found." });
     res.json({ user });
   } catch (err) {

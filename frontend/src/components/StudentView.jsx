@@ -101,7 +101,7 @@ function StudentView() {
           <div className="panel-header">
             <h3 className="panel-title">Confirm Your Session</h3>
             <p className="panel-description">
-              {formatDate(selectedSlot.date)} from {formatTime(selectedSlot.start_time)} to {formatTime(selectedSlot.end_time)}
+              {formatDate(selectedSlot.date)} from {formatTime(selectedSlot.start_time)} to {formatTime(selectedSlot.end_time)} with {selectedSlot.si_name}
             </p>
           </div>
           <form onSubmit={handleBook}>
@@ -153,6 +153,7 @@ function StudentView() {
                     <span className={`badge badge-${b.status}`}>{b.status}</span>
                   </div>
                   <div className="card-body">
+                    <p><strong>Instructor:</strong> {b.si_name}</p>
                     <p><strong>Date:</strong> {formatDate(b.date)}</p>
                     <p><strong>Time:</strong> {formatTime(b.start_time)} - {formatTime(b.end_time)}</p>
                     {b.notes && <p style={{ marginTop: '0.5rem' }}><strong>Notes:</strong> {b.notes}</p>}
@@ -198,9 +199,12 @@ function StudentView() {
                       {filteredSlots.map(slot => (
                         <div key={slot.id} className="card" style={{ padding: '1.25rem' }}>
                           <div className="card-header" style={{ marginBottom: 0, paddingBottom: 0, borderBottom: 'none', alignItems: 'center' }}>
-                            <p style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-main)', margin: 0 }}>
-                              {formatTime(slot.start_time)} - {formatTime(slot.end_time)}
-                            </p>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                              <p style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-main)', margin: 0 }}>
+                                {formatTime(slot.start_time)} - {formatTime(slot.end_time)}
+                              </p>
+                              <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>Instructor: {slot.si_name}</span>
+                            </div>
                             <button className="btn btn-primary" style={{ padding: '0.5rem 1rem', margin: 0 }} onClick={() => { setSelectedSlot(slot); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>
                               Select
                             </button>

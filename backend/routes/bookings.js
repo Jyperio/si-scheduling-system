@@ -6,29 +6,30 @@ const { authenticate, authorizeRole } = require('../middleware/authMiddleware');
 // GET all bookings (SI sees all, Student sees their own)
 router.get('/', authenticate, async (req, res) => {
   try {
-    const db = await dbPromise;
+    const db = dbPromise;
     
     let query = `
-      SELECT b.*, s.date, s.start_time, s.end_time, u.name as student_name, u.email as student_email
+      SELECT b.*, s.date, s.start_time, s.end_time, u.name as student_name, u.email as student_email, si.name as si_name
       FROM bookings b
       JOIN availability_slots s ON b.slot_id = s.id
       JOIN users u ON b.student_id = u.id
+      JOIN users si ON s.si_id = si.id
     `;
     let params = [];
 
     if (req.user.role === 'student') {
-       query += " WHERE b.student_id = ?";
+       query += " WHERE b.student_id = $1";
        params.push(req.user.id);
     } else {
        // Assuming SI only sees their slots
-       query += " WHERE s.si_id = ?";
+       query += " WHERE s.si_id = $1";
        params.push(req.user.id);
     }
     
     query += " ORDER BY s.date, s.start_time";
 
-    const bookings = await db.all(query, params);
-    res.json(bookings);
+    const resBookings = await db.query(query, params);
+    res.json(resBookings.rows);
   } catch (error) {
     res.status(500).json({ error: "Failed to retrieve bookings." });
   }
@@ -43,12 +44,14 @@ router.post('/', authenticate, authorizeRole('student'), async (req, res) => {
       return res.status(400).json({ error: "Missing required fields." });
     }
 
-    const db = await dbPromise;
-    await db.exec('BEGIN TRANSACTION');
+    const db = dbPromise;
+    const client = await db.connect();
+    await client.query('BEGIN');
     
     try {
       // Check slot availability
-      const slot = await db.get("SELECT is_booked FROM availability_slots WHERE id = ?", [slot_id]);
+      const slotRes = await client.query("SELECT is_booked FROM availability_slots WHERE id = $1", [slot_id]);
+      const slot = slotRes.rows[0];
       if (!slot) {
         throw new Error("Slot not found.");
       }
@@ -57,19 +60,21 @@ router.post('/', authenticate, authorizeRole('student'), async (req, res) => {
       }
       
       // Update slot to booked
-      await db.run("UPDATE availability_slots SET is_booked = 1 WHERE id = ?", [slot_id]);
+      await client.query("UPDATE availability_slots SET is_booked = true WHERE id = $1", [slot_id]);
       
       // Insert booking
-      const result = await db.run(
-        "INSERT INTO bookings (slot_id, student_id, course, topic, notes, status) VALUES (?, ?, ?, ?, ?, 'scheduled')",
+      const result = await client.query(
+        "INSERT INTO bookings (slot_id, student_id, course, topic, notes, status) VALUES ($1, $2, $3, $4, $5, 'scheduled') RETURNING id",
         [slot_id, req.user.id, course, topic, notes || '']
       );
       
-      await db.exec('COMMIT');
-      res.status(201).json({ id: result.lastID, slot_id, student_id: req.user.id, course, topic, status: 'scheduled' });
+      await client.query('COMMIT');
+      res.status(201).json({ id: result.rows[0].id, slot_id, student_id: req.user.id, course, topic, status: 'scheduled' });
     } catch (innerError) {
-      await db.exec('ROLLBACK');
+      await client.query('ROLLBACK');
       throw innerError;
+    } finally {
+      client.release();
     }
     
   } catch (error) {
@@ -95,11 +100,13 @@ router.put('/:id/status', authenticate, async (req, res) => {
       return res.status(403).json({ error: "Students can only cancel their own bookings." });
     }
 
-    const db = await dbPromise;
-    await db.exec('BEGIN TRANSACTION');
+    const db = dbPromise;
+    const client = await db.connect();
+    await client.query('BEGIN');
     
     try {
-      const booking = await db.get("SELECT slot_id, student_id, status FROM bookings WHERE id = ?", [id]);
+      const bookRes = await client.query("SELECT slot_id, student_id, status FROM bookings WHERE id = $1", [id]);
+      const booking = bookRes.rows[0];
       if (!booking) {
         throw new Error("Booking not found.");
       }
@@ -109,22 +116,25 @@ router.put('/:id/status', authenticate, async (req, res) => {
       }
       
       // Update status
-      await db.run("UPDATE bookings SET status = ? WHERE id = ?", [status, id]);
+      await client.query("UPDATE bookings SET status = $1 WHERE id = $2", [status, id]);
       
       // Free slot if canceled
       if (status === 'canceled' && booking.status !== 'canceled') {
-         await db.run("UPDATE availability_slots SET is_booked = 0 WHERE id = ?", [booking.slot_id]);
+         await client.query("UPDATE availability_slots SET is_booked = false WHERE id = $1", [booking.slot_id]);
       } else if (booking.status === 'canceled' && status !== 'canceled') {
-         const slot = await db.get("SELECT is_booked FROM availability_slots WHERE id = ?", [booking.slot_id]);
+         const slotRes = await client.query("SELECT is_booked FROM availability_slots WHERE id = $1", [booking.slot_id]);
+         const slot = slotRes.rows[0];
          if (slot.is_booked) throw new Error("Cannot reopen booking; slot is already taken.");
-         await db.run("UPDATE availability_slots SET is_booked = 1 WHERE id = ?", [booking.slot_id]);
+         await client.query("UPDATE availability_slots SET is_booked = true WHERE id = $1", [booking.slot_id]);
       }
       
-      await db.exec('COMMIT');
+      await client.query('COMMIT');
       res.json({ message: "Status updated successfully." });
     } catch (innerError) {
-      await db.exec('ROLLBACK');
+      await client.query('ROLLBACK');
       throw innerError;
+    } finally {
+      client.release();
     }
   } catch (error) {
     if (error.message === "Booking not found.") return res.status(404).json({ error: error.message });
