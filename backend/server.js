@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const { setupDatabase } = require('./database');
 const authRoutes = require('./routes/auth');
 const availabilityRoutes = require('./routes/availability');
@@ -15,6 +16,12 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api/availability', availabilityRoutes);
 app.use('/api/bookings', bookingRoutes);
+
+// Serve frontend in production
+app.use(express.static(path.join(__dirname, '../frontend/dist')));
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
+});
 
 // Database initialization & Server start
 setupDatabase().then(() => {
