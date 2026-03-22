@@ -21,26 +21,30 @@ async function setupDatabase() {
     const { parse } = require('pg-connection-string');
     const config = parse(connectionString);
 
+    config.ssl = { rejectUnauthorized: false };
+
     console.log('--- Database Config Debug ---');
     console.log('Host:', config.host);
     console.log('Port:', config.port);
     console.log('Database:', config.database);
     console.log('User:', config.user);
-    console.log('SSL:', !!config.ssl);
+    console.log('SSL Configured:', !!config.ssl);
     console.log('---------------------------');
 
-    if (!config.host) {
-      console.warn('WARNING: Host is undefined after parsing DATABASE_URL. Falling back to explicit properties.');
-      // If parsing fails for any reason, manually extract from the environment variable might be needed,
-      // but let's try to just re-assign.
-    }
-
-    config.ssl = { rejectUnauthorized: false };
     // Force IPv4 - Render/Railway free tiers often fail on IPv6 outbound
     config.stream = (c) => {
       const host = c.host || config.host;
       const port = c.port || config.port || 5432;
-      return net.connect(port, host, { family: 4 });
+      
+      return net.connect({
+        port,
+        host,
+        family: 4,
+        lookup: (hostname, options, callback) => {
+          // Explicitly force IPv4 during DNS lookup
+          dns.lookup(hostname, { family: 4 }, callback);
+        }
+      });
     };
 
     pool = new Pool(config);
