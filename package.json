@@ -1,0 +1,8 @@
+{
+  "name": "si-scheduling-system",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "cd frontend && npm install && node node_modules/vite/bin/vite.js build && cd ../backend && npm install",
+    "start": "node backend/server.js"
+  }
+}
