@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { dbPromise } = require('../database');
+const dbModule = require('../database');
 const { JWT_SECRET, authenticate } = require('../middleware/authMiddleware');
 
 router.post('/signup', async (req, res) => {
@@ -16,7 +16,7 @@ router.post('/signup', async (req, res) => {
       return res.status(400).json({ error: "Invalid role." });
     }
 
-    const db = dbPromise;
+    const db = dbModule.dbPromise;
     const existingRes = await db.query("SELECT id FROM users WHERE email = $1", [email]);
     const existing = existingRes.rows[0];
     if (existing) {
@@ -45,7 +45,7 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: "Missing required fields." });
     }
 
-    const db = dbPromise;
+    const db = dbModule.dbPromise;
     const userRes = await db.query("SELECT * FROM users WHERE email = $1", [email]);
     const user = userRes.rows[0];
     if (!user) {
@@ -67,7 +67,7 @@ router.post('/login', async (req, res) => {
 
 router.get('/me', authenticate, async (req, res) => {
   try {
-    const db = dbPromise;
+    const db = dbModule.dbPromise;
     const userRes = await db.query("SELECT id, name, email, role FROM users WHERE id = $1", [req.user.id]);
     const user = userRes.rows[0];
     if (!user) return res.status(404).json({ error: "User not found." });

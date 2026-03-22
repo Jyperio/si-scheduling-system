@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { dbPromise } = require('../database');
+const dbModule = require('../database');
 const { authenticate, authorizeRole } = require('../middleware/authMiddleware');
 
 function isValidTimeStr(timeStr) {
@@ -10,7 +10,7 @@ function isValidTimeStr(timeStr) {
 // GET all availability slots (public to authenticated users)
 router.get('/', authenticate, async (req, res) => {
   try {
-    const db = dbPromise;
+    const db = dbModule.dbPromise;
     const { date, is_booked } = req.query;
     
     let query = `
@@ -62,7 +62,7 @@ router.post('/', authenticate, authorizeRole('si'), async (req, res) => {
        return res.status(400).json({ error: "End time must be after start time." });
     }
 
-    const db = dbPromise;
+    const db = dbModule.dbPromise;
     
     // Check overlap
     const conflictRes = await db.query(`
@@ -89,7 +89,7 @@ router.post('/', authenticate, authorizeRole('si'), async (req, res) => {
 // DELETE availability slot (SI only)
 router.delete('/:id', authenticate, authorizeRole('si'), async (req, res) => {
   try {
-    const db = dbPromise;
+    const db = dbModule.dbPromise;
     const { id } = req.params;
     
     const slotRes = await db.query("SELECT is_booked, si_id FROM availability_slots WHERE id = $1", [id]);

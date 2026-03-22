@@ -1,12 +1,12 @@
 const express = require('express');
 const router = express.Router();
-const { dbPromise } = require('../database');
+const dbModule = require('../database');
 const { authenticate, authorizeRole } = require('../middleware/authMiddleware');
 
 // GET all bookings (SI sees all, Student sees their own)
 router.get('/', authenticate, async (req, res) => {
   try {
-    const db = dbPromise;
+    const db = dbModule.dbPromise;
     
     let query = `
       SELECT b.*, s.date, s.start_time, s.end_time, u.name as student_name, u.email as student_email, si.name as si_name
@@ -44,7 +44,7 @@ router.post('/', authenticate, authorizeRole('student'), async (req, res) => {
       return res.status(400).json({ error: "Missing required fields." });
     }
 
-    const db = dbPromise;
+    const db = dbModule.dbPromise;
     const client = await db.connect();
     await client.query('BEGIN');
     
@@ -100,7 +100,7 @@ router.put('/:id/status', authenticate, async (req, res) => {
       return res.status(403).json({ error: "Students can only cancel their own bookings." });
     }
 
-    const db = dbPromise;
+    const db = dbModule.dbPromise;
     const client = await db.connect();
     await client.query('BEGIN');
     
