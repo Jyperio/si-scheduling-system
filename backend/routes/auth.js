@@ -6,6 +6,7 @@ const { dbPromise } = require('../database');
 const { JWT_SECRET, authenticate } = require('../middleware/authMiddleware');
 
 router.post('/signup', async (req, res) => {
+  console.log('--- SIGNUP REQUEST RECEIVED ---', req.body.email);
   try {
     const { name, email, password, role } = req.body;
     if (!name || !email || !password || !role) {
