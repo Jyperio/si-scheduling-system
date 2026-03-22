@@ -22,29 +22,11 @@ async function setupDatabase() {
     const config = parse(connectionString);
 
     config.ssl = { rejectUnauthorized: false };
-
-    console.log('--- Database Config Debug ---');
-    console.log('Host:', config.host);
-    console.log('Port:', config.port);
-    console.log('Database:', config.database);
-    console.log('User:', config.user);
-    console.log('SSL Configured:', !!config.ssl);
-    console.log('---------------------------');
-
-    // Force IPv4 - Render/Railway free tiers often fail on IPv6 outbound
+    // Force IPv4 - Necessary for Render/Railway free tiers
     config.stream = (c) => {
       const host = c.host || config.host;
       const port = c.port || config.port || 5432;
-      
-      return net.connect({
-        port,
-        host,
-        family: 4,
-        lookup: (hostname, options, callback) => {
-          // Explicitly force IPv4 during DNS lookup
-          dns.lookup(hostname, { family: 4 }, callback);
-        }
-      });
+      return net.connect(port, host, { family: 4 });
     };
 
     pool = new Pool(config);
