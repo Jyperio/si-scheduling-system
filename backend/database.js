@@ -8,18 +8,28 @@ require('dotenv').config({ path: path.join(__dirname, '.env') });
 // Force IPv4 DNS resolution - Render free tier does not support IPv6
 dns.setDefaultResultOrder('ipv4first');
 
-const { parse } = require('pg-connection-string');
-const config = parse(process.env.DATABASE_URL);
-
-config.ssl = { rejectUnauthorized: false };
-// Force IPv4 - Render/Railway free tiers often fail on IPv6 outbound
-config.stream = (c) => {
-  return net.connect(c.port || 5432, c.host, { family: 4 });
-};
-
-const pool = new Pool(config);
+let pool;
 
 async function setupDatabase() {
+  if (!pool) {
+    const connectionString = process.env.DATABASE_URL;
+    if (!connectionString) {
+      console.error('ERROR: DATABASE_URL environment variable is missing!');
+      throw new Error('DATABASE_URL is required');
+    }
+
+    const { parse } = require('pg-connection-string');
+    const config = parse(connectionString);
+
+    config.ssl = { rejectUnauthorized: false };
+    // Force IPv4 - Render/Railway free tiers often fail on IPv6 outbound
+    config.stream = (c) => {
+      return net.connect(c.port || 5432, c.host, { family: 4 });
+    };
+
+    pool = new Pool(config);
+  }
+
   const client = await pool.connect();
   try {
     await client.query(`
@@ -66,7 +76,7 @@ async function setupDatabase() {
 }
 
 module.exports = {
-  dbPromise: pool, // keeping for backward compatibility in naming or changing to pool
-  pool,
+  get dbPromise() { return pool; },
+  get pool() { return pool; },
   setupDatabase
 };
