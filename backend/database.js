@@ -1,6 +1,7 @@
 const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 const dns = require('dns');
+const net = require('net');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
@@ -10,6 +11,10 @@ dns.setDefaultResultOrder('ipv4first');
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
+  // Force IPv4 - Render/Railway free tiers often fail on IPv6 outbound
+  stream: (config) => {
+    return net.connect(config.port, config.host, { family: 4 });
+  }
 });
 
 async function setupDatabase() {
