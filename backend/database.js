@@ -22,12 +22,8 @@ async function setupDatabase() {
     const config = parse(connectionString);
 
     config.ssl = { rejectUnauthorized: false };
-    // Force IPv4 - Necessary for Render/Railway free tiers
-    config.stream = (c) => {
-      const host = c.host || config.host;
-      const port = c.port || config.port || 5432;
-      return net.connect(port, host, { family: 4 });
-    };
+    // Supabase Pooler (6543) requires disabling prepared statements
+    config.prepare_threshold = 0;
 
     pool = new Pool(config);
   }
