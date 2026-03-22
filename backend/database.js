@@ -8,14 +8,16 @@ require('dotenv').config({ path: path.join(__dirname, '.env') });
 // Force IPv4 DNS resolution - Render free tier does not support IPv6
 dns.setDefaultResultOrder('ipv4first');
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
-  // Force IPv4 - Render/Railway free tiers often fail on IPv6 outbound
-  stream: (config) => {
-    return net.connect(config.port, config.host, { family: 4 });
-  }
-});
+const { parse } = require('pg-connection-string');
+const config = parse(process.env.DATABASE_URL);
+
+config.ssl = { rejectUnauthorized: false };
+// Force IPv4 - Render/Railway free tiers often fail on IPv6 outbound
+config.stream = (c) => {
+  return net.connect(c.port || 5432, c.host, { family: 4 });
+};
+
+const pool = new Pool(config);
 
 async function setupDatabase() {
   const client = await pool.connect();
